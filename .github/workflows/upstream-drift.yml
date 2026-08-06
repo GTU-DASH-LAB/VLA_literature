@@ -1,0 +1,59 @@
+name: upstream drift
+
+# upstream.json'da sabitlenen blob SHA'ları canlı openpi ile karşılaştırır.
+# Sapma varsa issue açar. Notu güncelledikten sonra upstream.json'ı da güncelle.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # her pazartesi 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Blob SHA'ları karşılaştır
+        id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo=$(jq -r .repo upstream.json)
+          drift=""
+          for path in $(jq -r '.files | keys[]' upstream.json); do
+            pinned=$(jq -r --arg p "$path" '.files[$p]' upstream.json)
+            live=$(gh api "repos/$repo/contents/$path" --jq .sha 2>/dev/null || echo "FETCH_FAILED")
+            if [ "$pinned" != "$live" ]; then
+              drift="${drift}- \`${path}\` — sabit \`${pinned:0:12}\` → canlı \`${live:0:12}\`"$'\n'
+            fi
+          done
+          if [ -n "$drift" ]; then
+            { echo "body<<DRIFT_EOF"; echo "$drift"; echo "DRIFT_EOF"; } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sapma varsa issue aç
+        if: steps.diff.outputs.body != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ steps.diff.outputs.body }}
+        run: |
+          title="upstream drift: openpi kaynak dosyaları değişti"
+          if gh issue list --state open --json title --jq '.[].title' | grep -qxF "$title"; then
+            echo "Zaten açık bir drift issue'su var, atlanıyor."
+            exit 0
+          fi
+          {
+            echo "Notların doğrulandığı openpi sürümünden sapma var:"
+            echo
+            echo "$BODY"
+            echo "Yapılacaklar:"
+            echo "1. Değişen dosyayı ham hâliyle indir ve ilgili notu tekrar doğrula."
+            echo "2. Notta değişen şey varsa \`DÜZELTME\` bloğu ekle (bkz. CLAUDE.md)."
+            echo "3. \`upstream.json\` içindeki SHA'yı güncelle — yoksa bu issue tekrar açılır."
+          } > /tmp/drift-body.md
+          gh issue create --title "$title" --body-file /tmp/drift-body.md

@@ -1,0 +1,10 @@
+{
+  "repo": "Physical-Intelligence/openpi",
+  "verified_commit": "15a9616",
+  "verified_date": "2026-08-06",
+  "files": {
+    "src/openpi/models/pi0.py": "ae7c4590f330f160aa9baa713d5b77fc060120de",
+    "src/openpi/models/pi0_config.py": "584d83f199e092203b59861a861c64768a4e0300",
+    "src/openpi/models/pi0_fast.py": "e6b5bd15e27a58a37e8db3f9f9b9707806fec7a5"
+  }
+}
